@@ -1,0 +1,13 @@
+#  Installer les packages dans l'ordre avec wheels précompilés
+pip install numpy pandas
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install spacy
+python -m spacy download fr_core_news_lg
+
+# 3. Installer le reste
+pip install python-dotenv pyyaml requests
+pip install transformers sentence-transformers
+pip install neo4j openai chromadb
+pip install PyPDF2 pdfplumber beautifulsoup4 python-docx
+pip install streamlit fastapi uvicorn
+pip install plotly networkx pyvis tqdm lxml pillow
