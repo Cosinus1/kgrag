@@ -15,8 +15,7 @@ py2neo==2021.2.3
 
 # LLM & RAG
 langchain==0.1.0
-anthropic==0.8.0
-openai==1.6.0
+openai==1.6.0  # Compatible avec DeepSeek API
 
 # Vector Store
 chromadb==0.4.18

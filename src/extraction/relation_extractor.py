@@ -1,8 +1,6 @@
-# src/extraction/relation_extractor.py
-
 import spacy
 from typing import List, Dict
-import anthropic
+from openai import OpenAI
 import os
 
 class RelationExtractor:
@@ -12,7 +10,11 @@ class RelationExtractor:
         self.nlp = spacy.load("fr_core_news_lg")
         self.use_llm = use_llm
         if use_llm:
-            self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            self.client = OpenAI(
+                api_key=os.getenv("DEEPSEEK_API_KEY"),
+                base_url=os.getenv("LLM_API_BASE", "https://api.deepseek.com/v1")
+            )
+            self.model = os.getenv("LLM_MODEL", "deepseek-chat")
     
     def extract_with_dependencies(self, text: str) -> List[Dict]:
         """Extrait les relations via les dépendances syntaxiques."""
@@ -36,7 +38,7 @@ class RelationExtractor:
         return relations
     
     def extract_with_llm(self, text: str, max_length: int = 2000) -> List[Dict]:
-        """Extrait les relations en utilisant un LLM."""
+        """Extrait les relations en utilisant DeepSeek."""
         # Tronquer le texte si trop long
         text = text[:max_length]
         
@@ -48,14 +50,15 @@ Réponds uniquement avec un JSON contenant une liste de triplets:
 {{"relations": [{{"subject": "...", "predicate": "...", "object": "..."}}]}}"""
         
         try:
-            message = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.3
             )
             
             import json
-            response_text = message.content[0].text
+            response_text = response.choices[0].message.content
             # Nettoyage des balises markdown si présentes
             response_text = response_text.replace("```json", "").replace("```", "").strip()
             result = json.loads(response_text)

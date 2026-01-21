@@ -1,5 +1,3 @@
-# app/api.py
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -26,7 +24,7 @@ graph_queries = GraphQueries(
     password=os.getenv("NEO4J_PASSWORD")
 )
 vector_store = VectorStore()
-llm = LLMInterface()
+llm = LLMInterface()  # Utilise DeepSeek automatiquement
 entity_extractor = EntityExtractor()
 
 # Modèles Pydantic
@@ -40,13 +38,18 @@ class AnswerResponse(BaseModel):
     entities: List[Dict]
     sources: List[str]
     context: Optional[str] = None
+    usage: Optional[Dict] = None
 
 class EntitySearchRequest(BaseModel):
     entity_name: str
 
 @app.get("/")
 def read_root():
-    return {"message": "Knowledge Graph RAG API", "version": "1.0.0"}
+    return {
+        "message": "Knowledge Graph RAG API", 
+        "version": "1.0.0",
+        "llm_provider": "DeepSeek"
+    }
 
 @app.post("/ask", response_model=AnswerResponse)
 def ask_question(request: QuestionRequest):
@@ -67,7 +70,7 @@ def ask_question(request: QuestionRequest):
         builder = ContextBuilder()
         context = builder.build_context(vector_results, graph_context)
         
-        # Génération de la réponse
+        # Génération de la réponse avec DeepSeek
         result = llm.answer_question(request.question, context)
         
         # Préparer la réponse
@@ -77,7 +80,8 @@ def ask_question(request: QuestionRequest):
             answer=result['answer'],
             entities=entities_in_question,
             sources=sources,
-            context=context
+            context=context,
+            usage=result.get('usage')
         )
     
     except Exception as e:
@@ -100,11 +104,11 @@ def get_entity_neighbors(entity_name: str, max_depth: int = 1):
 @app.get("/stats")
 def get_statistics():
     """Statistiques du graphe."""
-    # À implémenter : requêtes Neo4j pour compter entités, relations, etc.
     return {
         "entities": "N/A",
         "relationships": "N/A",
-        "documents": "N/A"
+        "documents": "N/A",
+        "llm_provider": "DeepSeek"
     }
 
 if __name__ == "__main__":
