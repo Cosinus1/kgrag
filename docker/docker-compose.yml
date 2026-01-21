@@ -1,0 +1,53 @@
+# docker/docker-compose.yml
+
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.14
+    container_name: kg_neo4j
+    ports:
+      - "7474:7474"  # Browser
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/your_password
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_plugins:/plugins
+    networks:
+      - kg_network
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: kg_app
+    ports:
+      - "8501:8501"  # Streamlit
+      - "8000:8000"  # FastAPI
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=your_password
+    env_file:
+      - ../.env
+    volumes:
+      - ../data:/app/data
+      - ../models:/app/models
+    depends_on:
+      - neo4j
+    networks:
+      - kg_network
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_plugins:
+
+networks:
+  kg_network:
+    driver: bridge

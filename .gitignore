@@ -1,0 +1,33 @@
+# Environment
+.env
+venv/
+env/
+
+# Data
+data/raw/*
+data/processed/*
+*.pdf
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Models
+models/*
+embeddings/*
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

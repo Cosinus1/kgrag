@@ -1,0 +1,37 @@
+project:
+  name: "Knowledge Graph RAG"
+  version: "1.0.0"
+
+corpus:
+  input_dir: "data/raw"
+  output_dir: "data/processed"
+  supported_formats: ["pdf", "txt", "html"]
+
+extraction:
+  spacy_model: "fr_core_news_lg"
+  entity_types: ["PERSON", "ORG", "GPE", "DATE", "EVENT", "PRODUCT"]
+  confidence_threshold: 0.7
+  use_llm_extraction: true
+  llm_batch_size: 10
+
+graph:
+  database: "neo4j"
+  batch_size: 1000
+  enable_enrichment: true
+  compute_metrics: true
+
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  dimension: 384
+  batch_size: 32
+
+rag:
+  top_k_vectors: 10
+  max_graph_depth: 2
+  max_context_length: 3000
+  enable_citations: true
+
+interface:
+  port: 8501
+  theme: "light"
+  show_graph: true
