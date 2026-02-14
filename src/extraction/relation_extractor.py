@@ -1,20 +1,61 @@
+# src/extraction/relation_extractor.py
+
 import spacy
 from typing import List, Dict
-from openai import OpenAI
 import os
 
 class RelationExtractor:
     """Extrait les relations entre entités."""
     
-    def __init__(self, use_llm: bool = True):
+    def __init__(self, use_llm: bool = True, llm_provider: str = "deepseek"):
         self.nlp = spacy.load("fr_core_news_lg")
         self.use_llm = use_llm
+        self.llm_provider = llm_provider.lower()
+        
         if use_llm:
-            self.client = OpenAI(
-                api_key=os.getenv("DEEPSEEK_API_KEY"),
-                base_url=os.getenv("LLM_API_BASE", "https://api.deepseek.com/v1")
-            )
-            self.model = os.getenv("LLM_MODEL", "deepseek-chat")
+            if self.llm_provider == "anthropic":
+                try:
+                    import anthropic
+                    self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+                    self.model = "claude-sonnet-4-20250514"
+                except Exception as e:
+                    print(f"⚠️  Erreur Anthropic: {e}")
+                    print("Basculement vers le mode syntaxique")
+                    self.use_llm = False
+                    
+            elif self.llm_provider in ["deepseek", "openai"]:
+                try:
+                    from openai import OpenAI
+                    
+                    if self.llm_provider == "deepseek":
+                        # DeepSeek configuration
+                        api_key = os.getenv("DEEPSEEK_API_KEY")
+                        if not api_key:
+                            raise ValueError("DEEPSEEK_API_KEY not found in environment")
+                        
+                        self.client = OpenAI(
+                            api_key=api_key,
+                            base_url="https://api.deepseek.com"
+                        )
+                        self.model = "deepseek-chat"
+                        print(f"✓ DeepSeek configuré avec le modèle {self.model}")
+                    else:
+                        # OpenAI configuration
+                        api_key = os.getenv("OPENAI_API_KEY")
+                        if not api_key:
+                            raise ValueError("OPENAI_API_KEY not found in environment")
+                        
+                        self.client = OpenAI(api_key=api_key)
+                        self.model = "gpt-4o-mini"
+                        print(f"✓ OpenAI configuré avec le modèle {self.model}")
+                        
+                except Exception as e:
+                    print(f"⚠️  Erreur {self.llm_provider}: {e}")
+                    print("Basculement vers le mode syntaxique")
+                    self.use_llm = False
+            else:
+                print(f"⚠️  Provider '{self.llm_provider}' non supporté. Options: anthropic, deepseek, openai")
+                self.use_llm = False
     
     def extract_with_dependencies(self, text: str) -> List[Dict]:
         """Extrait les relations via les dépendances syntaxiques."""
@@ -38,37 +79,51 @@ class RelationExtractor:
         return relations
     
     def extract_with_llm(self, text: str, max_length: int = 2000) -> List[Dict]:
-        """Extrait les relations en utilisant DeepSeek."""
+        """Extrait les relations en utilisant un LLM."""
         # Tronquer le texte si trop long
         text = text[:max_length]
         
         prompt = f"""Extrait les triplets (sujet, prédicat, objet) du texte suivant.
-        
+
 Texte: {text}
 
 Réponds uniquement avec un JSON contenant une liste de triplets:
 {{"relations": [{{"subject": "...", "predicate": "...", "object": "..."}}]}}"""
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1000,
-                temperature=0.3
-            )
+            if self.llm_provider == "anthropic":
+                import anthropic
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=1000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                response_text = message.content[0].text
+                
+            elif self.llm_provider in ["deepseek", "openai"]:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "Tu es un expert en extraction d'informations. Réponds toujours en JSON valide."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=1000
+                )
+                response_text = response.choices[0].message.content
             
-            import json
-            response_text = response.choices[0].message.content
             # Nettoyage des balises markdown si présentes
+            import json
             response_text = response_text.replace("```json", "").replace("```", "").strip()
             result = json.loads(response_text)
             
             for rel in result.get('relations', []):
-                rel['method'] = 'llm'
+                rel['method'] = f'llm_{self.llm_provider}'
             
             return result.get('relations', [])
+            
         except Exception as e:
-            print(f"Erreur LLM: {e}")
+            print(f"⚠️  Erreur LLM: {e}")
             return []
     
     def extract_relations(self, text: str) -> List[Dict]:
