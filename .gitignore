@@ -8,6 +8,7 @@ data/raw/*
 data/processed/*
 *.pdf
 *.csv
+chroma_db/*
 
 # Python
 __pycache__/
