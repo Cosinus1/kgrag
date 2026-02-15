@@ -7,7 +7,7 @@ import os
 class RelationExtractor:
     """Extrait les relations entre entités."""
     
-    def __init__(self, use_llm: bool = True, llm_provider: str = "deepseek"):
+    def __init__(self, use_llm: bool = False, llm_provider: str = "deepseek"):
         self.nlp = spacy.load("fr_core_news_lg")
         self.use_llm = use_llm
         self.llm_provider = llm_provider.lower()
@@ -28,7 +28,6 @@ class RelationExtractor:
                     from openai import OpenAI
                     
                     if self.llm_provider == "deepseek":
-                        # DeepSeek configuration
                         api_key = os.getenv("DEEPSEEK_API_KEY")
                         if not api_key:
                             raise ValueError("DEEPSEEK_API_KEY not found in environment")
@@ -40,7 +39,6 @@ class RelationExtractor:
                         self.model = "deepseek-chat"
                         print(f"✓ DeepSeek configuré avec le modèle {self.model}")
                     else:
-                        # OpenAI configuration
                         api_key = os.getenv("OPENAI_API_KEY")
                         if not api_key:
                             raise ValueError("OPENAI_API_KEY not found in environment")
@@ -54,33 +52,44 @@ class RelationExtractor:
                     print("Basculement vers le mode syntaxique")
                     self.use_llm = False
             else:
-                print(f"⚠️  Provider '{self.llm_provider}' non supporté. Options: anthropic, deepseek, openai")
+                print(f"⚠️  Provider '{self.llm_provider}' non supporté")
                 self.use_llm = False
     
     def extract_with_dependencies(self, text: str) -> List[Dict]:
-        """Extrait les relations via les dépendances syntaxiques."""
+        """Extrait les relations via les dépendances syntaxiques - SEULEMENT entre entités nommées."""
         doc = self.nlp(text)
         relations = []
         
+        # CRITICAL FIX: Extract entities first
+        entity_texts = {ent.text for ent in doc.ents}
+        
+        if len(entity_texts) < 2:
+            return []  # Need at least 2 entities
+        
+        # Only create relations where BOTH subject AND object are entities
         for token in doc:
+            if token.text not in entity_texts:
+                continue
+                
             if token.dep_ in ['nsubj', 'dobj', 'pobj']:
                 subject = token.text
                 predicate = token.head.text
                 
                 for child in token.head.children:
                     if child.dep_ in ['dobj', 'pobj'] and child != token:
-                        relations.append({
-                            'subject': subject,
-                            'predicate': predicate,
-                            'object': child.text,
-                            'method': 'dependency'
-                        })
+                        # CRITICAL: object must also be an entity
+                        if child.text in entity_texts:
+                            relations.append({
+                                'subject': subject,
+                                'predicate': predicate,
+                                'object': child.text,
+                                'method': 'dependency'
+                            })
         
         return relations
     
     def extract_with_llm(self, text: str, max_length: int = 2000) -> List[Dict]:
         """Extrait les relations en utilisant un LLM."""
-        # Tronquer le texte si trop long
         text = text[:max_length]
         
         prompt = f"""Extrait les triplets (sujet, prédicat, objet) du texte suivant.
@@ -112,7 +121,6 @@ Réponds uniquement avec un JSON contenant une liste de triplets:
                 )
                 response_text = response.choices[0].message.content
             
-            # Nettoyage des balises markdown si présentes
             import json
             response_text = response_text.replace("```json", "").replace("```", "").strip()
             result = json.loads(response_text)

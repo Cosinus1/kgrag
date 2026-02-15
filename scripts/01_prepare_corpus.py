@@ -18,7 +18,7 @@ def main():
     
     # Vérifier que le répertoire existe
     if not raw_dir.exists():
-        print(f"❌ Erreur: Le répertoire {raw_dir} n'existe pas!")
+        print(f"\n❌ Erreur: Le répertoire {raw_dir} n'existe pas!")
         print("   Exécutez d'abord: python scripts/00_load_data.py")
         return
     
@@ -32,15 +32,47 @@ def main():
         print("   Exécutez d'abord: python scripts/00_load_data.py")
         return
     
+    # NOUVEAU: Demander combien de documents traiter
+    print(f"\n{'='*60}")
+    print("Sélection du nombre de documents")
+    print("="*60)
+    print(f"\nNombre total de fichiers disponibles: {len(txt_files)}")
+    print("\nOptions:")
+    print("  1. Tous les documents (défaut)")
+    print("  2. Choisir un nombre spécifique")
+    
+    choice = input("\nVotre choix (1 ou 2, défaut=1): ").strip()
+    
+    num_docs_to_process = len(txt_files)  # Par défaut, tous
+    
+    if choice == "2":
+        while True:
+            try:
+                num_input = input(f"\nNombre de documents à traiter (1-{len(txt_files)}): ").strip()
+                num_docs = int(num_input)
+                
+                if 1 <= num_docs <= len(txt_files):
+                    num_docs_to_process = num_docs
+                    break
+                else:
+                    print(f"⚠️  Veuillez entrer un nombre entre 1 et {len(txt_files)}")
+            except ValueError:
+                print("⚠️  Veuillez entrer un nombre valide")
+    
+    print(f"\n✓ Traitement de {num_docs_to_process} document(s)")
+    
     # Charger les documents
     print(f"\n{'='*60}")
     print("Étape 1/3: Chargement des documents")
     print("="*60)
     
     loader = DocumentLoader(raw_dir)
-    documents = loader.load_all_documents()
+    all_documents = loader.load_all_documents()
     
-    print(f"\n✓ Chargé: {len(documents)} documents")
+    # Limiter au nombre choisi
+    documents = all_documents[:num_docs_to_process]
+    
+    print(f"\n✓ Chargé: {len(documents)} documents (sur {len(all_documents)} disponibles)")
     
     if len(documents) == 0:
         print("❌ Aucun document chargé! Vérifiez les fichiers.")
@@ -75,7 +107,9 @@ def main():
             
             cleaned_count += 1
             
-            if (i + 1) % 100 == 0:
+            # Afficher la progression tous les 100 docs ou tous les 10% si moins de 100
+            progress_interval = min(100, max(1, len(documents) // 10))
+            if (i + 1) % progress_interval == 0 or (i + 1) == len(documents):
                 print(f"Progress: {i + 1}/{len(documents)} documents nettoyés...")
                 
         except Exception as e:
@@ -103,7 +137,7 @@ def main():
     print(f"📊 Caractères totaux: {total_chars:,}")
     print(f"📄 Paragraphes totaux: {total_paragraphs:,}")
     print(f"💾 Sauvegardé dans: {output_file.absolute()}")
-    print(f"\nProchaine étape: python scripts/02_extract_entities.py")
+    print(f"\n📌 Prochain étape: python scripts/02_extract_entities.py")
     print("="*60)
 
 if __name__ == "__main__":
