@@ -9,21 +9,24 @@ class EntityExtractor:
     
     def __init__(self, model_name: str = "fr_core_news_lg", entity_types: List[str] = None):
         self.nlp = spacy.load(model_name)
-        self.entity_types = entity_types or ["PERSON", "ORG", "GPE", "DATE", "EVENT"]
+        self.entity_types = entity_types or ["PERSON", "ORG", "GPE", "DATE", "EVENT", "PRODUCT", "LOC"]
     
-    def extract_entities(self, text: str) -> List[Dict]:
+    def extract_entities(self, text: str, doc_id: str = None) -> List[Dict]:
         """Extrait les entités d'un texte."""
         doc = self.nlp(text)
         entities = []
         
         for ent in doc.ents:
             if ent.label_ in self.entity_types:
-                entities.append({
+                entity = {
                     'text': ent.text,
                     'label': ent.label_,
                     'start': ent.start_char,
                     'end': ent.end_char
-                })
+                }
+                if doc_id:
+                    entity['doc_id'] = doc_id
+                entities.append(entity)
         
         return entities
     
@@ -33,7 +36,6 @@ class EntityExtractor:
         normalized = defaultdict(set)
         
         for entity in entities:
-            # Normalisation basique
             normalized_text = entity['text'].strip().lower()
             normalized[entity['label']].add(normalized_text)
         
@@ -44,10 +46,12 @@ class EntityExtractor:
         results = []
         
         for doc in documents:
-            entities = self.extract_entities(doc['text'])
+            doc_id = doc.get('filename', 'unknown')
+            entities = self.extract_entities(doc['text'], doc_id=doc_id)
             results.append({
-                'document_id': doc.get('filename', 'unknown'),
-                'entities': entities
+                'document_id': doc_id,
+                'entities': entities,
+                'text': doc['text']
             })
         
         return results

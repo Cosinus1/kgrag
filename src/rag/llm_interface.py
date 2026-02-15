@@ -7,7 +7,6 @@ class LLMInterface:
     """Interface pour interagir avec le LLM."""
     
     def __init__(self, provider: str = None, model: str = None):
-        # Auto-detect provider based on available API keys
         if provider is None:
             if os.getenv("DEEPSEEK_API_KEY"):
                 provider = "deepseek"
@@ -22,7 +21,6 @@ class LLMInterface:
         
         self.provider = provider.lower()
         
-        # Initialize client based on provider
         if self.provider == "anthropic":
             import anthropic
             self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -43,46 +41,39 @@ class LLMInterface:
         else:
             raise ValueError(f"Unsupported provider: {provider}")
     
-    def format_context(self, graph_context: Dict) -> str:
-        """Formate le contexte du graphe pour le LLM."""
-        context_parts = []
-        
-        # Entités
-        if graph_context.get('entities'):
-            entities_str = "\n".join([
-                f"- {e.get('name', 'Unknown')} ({e.get('type', 'unknown')})" 
-                for e in graph_context['entities'][:20]  # Limit to avoid token overflow
-            ])
-            context_parts.append(f"Entités pertinentes:\n{entities_str}")
-        
-        # Relations
-        if graph_context.get('relationships'):
-            rels_str = "\n".join([
-                f"- {r.get('subject', '?')} --[{r.get('type', 'relates to')}]--> {r.get('object', '?')}"
-                for r in graph_context['relationships'][:30]  # Limit
-            ])
-            context_parts.append(f"\nRelations:\n{rels_str}")
-        
-        return "\n\n".join(context_parts)
-    
     def answer_question(self, question: str, context: str) -> Dict:
-        """Génère une réponse basée sur le contexte."""
+        """Génère une réponse basée sur le contexte du graphe."""
         
-        prompt = f"""Tu es un assistant qui répond aux questions en te basant sur un graphe de connaissances.
+        system_prompt = """Tu es un assistant expert qui analyse un graphe de connaissances pour répondre à des questions.
 
-Contexte du graphe:
+INSTRUCTIONS:
+1. Analyse attentivement le contexte fourni (entités, relations, documents)
+2. Identifie les informations pertinentes pour la question
+3. Synthétise une réponse claire et précise basée UNIQUEMENT sur le contexte
+4. Si l'information n'est pas disponible, indique-le clairement
+5. Cite les sources quand c'est pertinent
+
+FORMAT DE RÉPONSE:
+- Commence directement par la réponse
+- Sois concis et factuel
+- Utilise des paragraphes courts
+- Ne répète pas le contexte, synthétise-le"""
+
+        user_prompt = f"""CONTEXTE DU GRAPHE:
 {context}
 
-Question: {question}
+QUESTION: {question}
 
-Réponds de manière précise en te basant uniquement sur le contexte fourni. Si l'information n'est pas dans le contexte, dis-le clairement."""
+Réponds de manière concise en te basant sur le contexte fourni."""
         
         try:
             if self.provider == "anthropic":
                 message = self.client.messages.create(
                     model=self.model,
-                    max_tokens=2000,
-                    messages=[{"role": "user", "content": prompt}]
+                    max_tokens=3000,
+                    temperature=0.3,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}]
                 )
                 answer = message.content[0].text
                 usage = {
@@ -94,11 +85,11 @@ Réponds de manière précise en te basant uniquement sur le contexte fourni. Si
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "Tu es un assistant expert qui répond aux questions basées sur un graphe de connaissances."},
-                        {"role": "user", "content": prompt}
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
                     ],
                     temperature=0.3,
-                    max_tokens=2000
+                    max_tokens=3000
                 )
                 answer = response.choices[0].message.content
                 usage = {

@@ -1,0 +1,38 @@
+# config_relations.yaml
+# Configuration pour l'extraction de relations optimisée
+
+extraction:
+  # Relations syntaxiques
+  syntactic:
+    enabled: true
+    max_per_document: 20
+    max_text_length: 3000
+    max_documents: 50  # Limiter aux 50 premiers docs seulement
+  
+  # Relations de co-occurrence
+  cooccurrence:
+    enabled: true
+    min_strength: 3  # Au moins 3 documents en commun
+    min_entity_mentions: 3  # Entité mentionnée au moins 3 fois
+  
+  # Relations de proximité
+  proximity:
+    enabled: true
+    window_chars: 150  # Fenêtre de 150 caractères
+    max_per_document: 20  # Max 20 relations par document
+  
+  # Déduplication
+  deduplication:
+    enabled: true
+    normalize_case: true  # Minuscules
+    normalize_whitespace: true
+  
+  # Filtrage final
+  filtering:
+    min_entity_frequency: 3  # Garder seulement les entités fréquentes
+    remove_self_loops: true  # Pas de A->A
+    min_relation_strength: 2  # Pour co-occurrence
+
+# Résultat attendu pour 100 documents:
+# - Avant: ~1,400,000 relations
+# - Après: ~5,000-15,000 relations (réduction de 99%)

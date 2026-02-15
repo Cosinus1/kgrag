@@ -11,19 +11,17 @@ from tqdm import tqdm
 
 def main():
     print("="*60)
-    print("Extraction d'Entités et de Relations")
+    print("Extraction d'Entités et de Relations (Optimisée)")
     print("="*60)
     
-    # Vérifier que le fichier existe
     input_file = Path("data/processed/documents.json")
     if not input_file.exists():
         print(f"\n❌ Erreur: {input_file} n'existe pas!")
         print("   Exécutez d'abord: python scripts/01_prepare_corpus.py")
         return
     
-    # Charger les documents avec UTF-8
     print(f"\n📂 Chargement des documents depuis {input_file}...")
-    with open(input_file, 'r', encoding='utf-8') as f:  # ← UTF-8 encoding added!
+    with open(input_file, 'r', encoding='utf-8') as f:
         documents = json.load(f)
     
     print(f"✓ Chargé: {len(documents)} documents")
@@ -32,19 +30,16 @@ def main():
         print("❌ Aucun document trouvé!")
         return
     
-    # Initialiser les extracteurs
     print(f"\n{'='*60}")
-    print("Étape 1/2: Extraction des entités")
+    print("Étape 1/4: Extraction des entités")
     print("="*60)
-    print("\n⚙️  Initialisation du modèle spaCy (cela peut prendre un moment)...")
+    print("\n⚙️  Initialisation du modèle spaCy...")
     
     entity_extractor = EntityExtractor()
     
-    # Extraire les entités
     print("\n🔍 Extraction des entités en cours...")
     entities = entity_extractor.extract_from_documents(documents)
     
-    # Statistiques des entités
     total_entities = sum(len(doc_entities['entities']) for doc_entities in entities)
     entity_types = {}
     for doc_entities in entities:
@@ -59,100 +54,109 @@ def main():
     for entity_type, count in sorted(entity_types.items(), key=lambda x: x[1], reverse=True):
         print(f"    - {entity_type}: {count:,}")
     
-    # Sauvegarder les entités
     entities_dir = Path("data/entities")
     entities_dir.mkdir(parents=True, exist_ok=True)
     entities_file = entities_dir / "entities.json"
     
     print(f"\n💾 Sauvegarde des entités dans {entities_file}...")
-    with open(entities_file, 'w', encoding='utf-8') as f:  # ← UTF-8 encoding!
+    with open(entities_file, 'w', encoding='utf-8') as f:
         json.dump(entities, f, ensure_ascii=False, indent=2)
     
     print("✓ Entités sauvegardées")
     
-    # Extraire les relations
     print(f"\n{'='*60}")
-    print("Étape 2/2: Extraction des relations")
+    print("Étape 2/4: Extraction des relations syntaxiques")
     print("="*60)
     
-    # Demander à l'utilisateur s'il veut utiliser le LLM
-    use_llm = input("\n❓ Utiliser le LLM pour l'extraction de relations? (y/n, défaut=n): ").strip().lower() == 'y'
+    relation_extractor = RelationExtractor()
+    syntactic_relations = []
     
-    llm_provider = "deepseek"  # Default to DeepSeek
+    print(f"\n🔗 Extraction des relations syntaxiques (limitée)...")
     
-    if use_llm:
-        print("\n⚙️  Choisir le provider LLM:")
-        print("  1. DeepSeek (rapide et pas cher)")
-        print("  2. OpenAI GPT-4")
-        print("  3. Anthropic Claude")
-        
-        choice = input("Choix (1-3, défaut=1): ").strip()
-        
-        if choice == "2":
-            llm_provider = "openai"
-        elif choice == "3":
-            llm_provider = "anthropic"
-        else:
-            llm_provider = "deepseek"
-        
-        print(f"✓ Mode LLM activé avec {llm_provider.upper()}")
-        print(f"⚠️  Assurez-vous d'avoir défini {llm_provider.upper()}_API_KEY dans votre .env")
-    else:
-        print("⚙️  Mode syntaxique - rapide mais moins précis")
-    
-    relation_extractor = RelationExtractor(use_llm=use_llm, llm_provider=llm_provider)
-    all_relations = []
-    
-    print(f"\n🔗 Extraction des relations en cours...")
-    
-    # Limiter le nombre de documents pour le LLM (c'est coûteux)
-    max_docs_for_relations = 100 if use_llm else len(documents)
-    docs_to_process = documents[:max_docs_for_relations]
-    
-    if use_llm and len(documents) > max_docs_for_relations:
-        print(f"⚠️  Mode LLM: traitement des {max_docs_for_relations} premiers documents seulement")
-    
-    for doc in tqdm(docs_to_process, desc="Extraction relations"):
+    for doc in tqdm(documents[:50], desc="Relations syntaxiques"):
         try:
-            # Limiter la longueur du texte pour éviter les timeouts
-            text = doc['text'][:5000] if use_llm else doc['text']
+            text = doc['text'][:3000]
             relations = relation_extractor.extract_relations(text)
-            all_relations.extend(relations)
+            syntactic_relations.extend(relations[:20])
         except Exception as e:
-            print(f"\n⚠️  Erreur pour {doc.get('filename', 'unknown')}: {e}")
             continue
     
-    print(f"\n✓ Extraction terminée!")
-    print(f"  - Total de relations: {len(all_relations):,}")
+    print(f"\n✓ Relations syntaxiques brutes: {len(syntactic_relations):,}")
     
-    # Statistiques des relations
-    if all_relations:
-        relation_methods = {}
-        for rel in all_relations:
-            method = rel.get('method', 'unknown')
-            relation_methods[method] = relation_methods.get(method, 0) + 1
-        
-        print(f"\n  Répartition par méthode:")
-        for method, count in sorted(relation_methods.items(), key=lambda x: x[1], reverse=True):
-            print(f"    - {method}: {count:,}")
+    print(f"\n{'='*60}")
+    print("Étape 3/4: Relations de co-occurrence (filtrées)")
+    print("="*60)
     
-    # Sauvegarder les relations
+    print(f"\n🔗 Extraction des co-occurrences significatives (≥3 documents)...")
+    cooccurrence_relations = relation_extractor.extract_cooccurrence_relations(
+        entities, 
+        min_strength=3
+    )
+    
+    print(f"✓ Relations de co-occurrence: {len(cooccurrence_relations):,}")
+    
+    print(f"\n🔗 Extraction des relations de proximité (limitées)...")
+    proximity_relations = []
+    for doc_entities in tqdm(entities, desc="Relations de proximité"):
+        proximity_relations.extend(
+            relation_extractor.extract_proximity_relations(
+                doc_entities, 
+                window=150, 
+                max_per_doc=20
+            )
+        )
+    
+    print(f"✓ Relations de proximité brutes: {len(proximity_relations):,}")
+    
+    print(f"\n{'='*60}")
+    print("Étape 4/4: Déduplication et filtrage")
+    print("="*60)
+    
+    all_relations = syntactic_relations + cooccurrence_relations + proximity_relations
+    
+    print(f"\n🔄 Total avant déduplication: {len(all_relations):,}")
+    
+    print("🔄 Déduplication des relations...")
+    deduplicated = relation_extractor.deduplicate_relations(all_relations)
+    print(f"✓ Après déduplication: {len(deduplicated):,}")
+    
+    print("🔄 Filtrage par fréquence des entités (≥3 mentions)...")
+    filtered = relation_extractor.filter_by_entity_frequency(
+        deduplicated, 
+        entities, 
+        min_mentions=3
+    )
+    print(f"✓ Après filtrage: {len(filtered):,}")
+    
+    final_relations = filtered
+    
+    relation_methods = {}
+    for rel in final_relations:
+        method = rel.get('method', 'unknown')
+        relation_methods[method] = relation_methods.get(method, 0) + 1
+    
+    print(f"\n  Répartition finale par méthode:")
+    for method, count in sorted(relation_methods.items(), key=lambda x: x[1], reverse=True):
+        print(f"    - {method}: {count:,}")
+    
     relations_dir = Path("data/relations")
     relations_dir.mkdir(parents=True, exist_ok=True)
     relations_file = relations_dir / "relations.json"
     
     print(f"\n💾 Sauvegarde des relations dans {relations_file}...")
-    with open(relations_file, 'w', encoding='utf-8') as f:  # ← UTF-8 encoding!
-        json.dump(all_relations, f, ensure_ascii=False, indent=2)
+    with open(relations_file, 'w', encoding='utf-8') as f:
+        json.dump(final_relations, f, ensure_ascii=False, indent=2)
     
     print("✓ Relations sauvegardées")
     
-    # Résumé final
+    reduction = ((len(all_relations) - len(final_relations)) / len(all_relations) * 100) if all_relations else 0
+    
     print(f"\n{'='*60}")
     print("TERMINÉ!")
     print("="*60)
     print(f"✅ Entités extraites: {total_entities:,}")
-    print(f"✅ Relations extraites: {len(all_relations):,}")
+    print(f"✅ Relations extraites: {len(final_relations):,}")
+    print(f"📉 Réduction: {reduction:.1f}% (de {len(all_relations):,} à {len(final_relations):,})")
     print(f"📁 Entités: {entities_file.absolute()}")
     print(f"📁 Relations: {relations_file.absolute()}")
     print(f"\nProchaine étape: python scripts/03_build_graph.py")
