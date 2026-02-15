@@ -6,6 +6,9 @@ env/
 # Data
 data/raw/*
 data/processed/*
+data/entities/*
+data/relations/*
+data/embeddings/*
 *.pdf
 *.csv
 chroma_db/*
